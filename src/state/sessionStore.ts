@@ -21,6 +21,7 @@ export interface GuildSession {
   activeSpeakers: Set<string>;
   activeCaptureUsers: Set<string>;
   lastUserSpeechAt: number;
+  guildCooldownUntilMs: number;
   detachReceiver?: () => void;
 }
 
@@ -43,7 +44,8 @@ export function getOrCreateSession(guildId: string, modeDefault: SessionMode): G
     isQueueProcessing: false,
     activeSpeakers: new Set<string>(),
     activeCaptureUsers: new Set<string>(),
-    lastUserSpeechAt: 0
+    lastUserSpeechAt: 0,
+    guildCooldownUntilMs: 0
   };
 
   sessions.set(guildId, created);

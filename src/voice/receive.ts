@@ -45,6 +45,30 @@ function markCooldown(session: GuildSession, userId: string, cooldownSeconds: nu
   session.cooldownUntilByUser.set(userId, Date.now() + cooldownSeconds * 1000);
 }
 
+function shouldIgnoreGuildCooldown(session: GuildSession): boolean {
+  return Date.now() < session.guildCooldownUntilMs;
+}
+
+function markGuildCooldown(session: GuildSession, cooldownSeconds: number): void {
+  session.guildCooldownUntilMs = Date.now() + cooldownSeconds * 1000;
+}
+
+function isAllowedSpeaker(runtime: BotRuntime, userId: string): boolean {
+  const allowed = runtime.config.allowedSpeakerUserIds;
+  if (allowed.length === 0) {
+    return true;
+  }
+  return allowed.includes(userId);
+}
+
+function shortenForSafety(input: string, maxChars: number): string {
+  const sanitized = input.replaceAll("@everyone", "@\u200beveryone").replaceAll("@here", "@\u200bhere");
+  if (sanitized.length <= maxChars) {
+    return sanitized;
+  }
+  return `${sanitized.slice(0, maxChars - 1)}…`;
+}
+
 function isTextChannel(channel: unknown): channel is GuildTextBasedChannel {
   return Boolean(channel && typeof (channel as GuildTextBasedChannel).send === "function");
 }
@@ -57,7 +81,10 @@ async function maybeSendTextReply(session: GuildSession, guild: Guild, text: str
     ?? (await guild.channels.fetch(session.textChannelId).catch(() => null));
 
   if (isTextChannel(channel)) {
-    await channel.send(`**Botti:** ${text}`);
+    await channel.send({
+      content: `**Botti:** ${text}`,
+      allowedMentions: { parse: [] }
+    });
   }
 }
 
@@ -66,7 +93,11 @@ function getRecentTranscript(session: GuildSession): TranscriptEntry[] {
   return session.transcript.filter((entry) => entry.atMs >= cutoff);
 }
 
-function enqueueTts(session: GuildSession, item: TtsQueueItem): void {
+function enqueueTts(session: GuildSession, item: TtsQueueItem, maxQueueItems: number): void {
+  if (session.ttsQueue.length >= maxQueueItems) {
+    session.ttsQueue.shift();
+    logger.warn("TTS queue limit reached; dropping oldest item", { guildId: session.guildId });
+  }
   session.ttsQueue.push(item);
 }
 
@@ -121,7 +152,7 @@ async function processQueue(session: GuildSession): Promise<void> {
       await waitForSilence(session);
       const resource = createAudioResource(Readable.from(next.audio), { inputType: next.inputType });
       session.player.play(resource);
-      logger.info("TTS played", { guildId: session.guildId, text: next.text });
+      logger.info("TTS played", { guildId: session.guildId, textLength: next.text.length });
       await waitForPlayerIdle(session);
     }
   } finally {
@@ -165,7 +196,12 @@ async function handleUtterance(
     return;
   }
 
-  logger.info("Transcribed", { guildId: guild.id, userId, text: transcript });
+  logger.info("Transcribed", {
+    guildId: guild.id,
+    userId,
+    textLength: transcript.length,
+    text: runtime.config.logContent ? transcript : undefined
+  });
   addTranscriptEntry(session, {
     userId,
     username,
@@ -190,15 +226,21 @@ async function handleUtterance(
     logger.debug("User in cooldown; skipping response", { guildId: guild.id, userId });
     return;
   }
+  if (shouldIgnoreGuildCooldown(session)) {
+    logger.debug("Guild in cooldown; skipping response", { guildId: guild.id, userId });
+    return;
+  }
   markCooldown(session, userId, runtime.config.userCooldownSeconds);
+  markGuildCooldown(session, runtime.config.guildCooldownSeconds);
 
   const latestUtterance = wakewordDetected ? stripWakeWord(transcript) || transcript : transcript;
   logger.info("LLM called", { guildId: guild.id, userId, wakewordDetected, mode: session.mode });
-  const reply = (await runtime.llm.generateReply({
+  const rawReply = (await runtime.llm.generateReply({
     transcript: getRecentTranscript(session),
     latestSpeaker: username,
     latestUtterance
   })).trim();
+  const reply = shortenForSafety(rawReply, runtime.config.maxReplyChars);
   if (!reply) {
     return;
   }
@@ -218,7 +260,7 @@ async function handleUtterance(
     text: reply,
     audio: ttsAudio,
     inputType: StreamType.OggOpus
-  });
+  }, runtime.config.maxTtsQueueItems);
   await processQueue(session);
 }
 
@@ -320,6 +362,9 @@ export function attachReceiver(session: GuildSession, guild: Guild, runtime: Bot
 
   const onStart = (userId: string): void => {
     if (userId === botId) {
+      return;
+    }
+    if (!isAllowedSpeaker(runtime, userId)) {
       return;
     }
     session.activeSpeakers.add(userId);

@@ -2,6 +2,7 @@ import { GuildMember, SlashCommandBuilder } from "discord.js";
 import { getOrCreateSession } from "../../state/sessionStore";
 import { joinMemberVoiceChannel } from "../../voice/join";
 import { BotCommand } from "./types";
+import { ensureControlAccess } from "./guards";
 
 export const joinCommand: BotCommand = {
   data: new SlashCommandBuilder()
@@ -10,6 +11,9 @@ export const joinCommand: BotCommand = {
   async execute(interaction, context) {
     if (!interaction.inGuild()) {
       await interaction.reply({ content: "Tämä komento toimii vain palvelimella.", ephemeral: true });
+      return;
+    }
+    if (!(await ensureControlAccess(interaction, context.runtime.config))) {
       return;
     }
 

@@ -13,6 +13,17 @@ function optional(name: string): string | undefined {
   return value ? value : undefined;
 }
 
+function toCsvList(name: string): string[] {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    return [];
+  }
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
+
 function toInt(name: string, fallback: number): number {
   const value = process.env[name];
   if (!value) {
@@ -71,6 +82,9 @@ export function loadConfig(): AppConfig {
     discordToken: required("DISCORD_TOKEN"),
     discordClientId: required("DISCORD_CLIENT_ID"),
     discordGuildId: optional("DISCORD_GUILD_ID"),
+    adminUserIds: toCsvList("ADMIN_USER_IDS"),
+    allowOnlyAdminsForControlCommands: toBool("ALLOW_ONLY_ADMINS_FOR_CONTROL_COMMANDS", true),
+    allowedSpeakerUserIds: toCsvList("ALLOWED_SPEAKER_USER_IDS"),
     openaiApiKey: required("OPENAI_API_KEY"),
     openaiModel: process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini",
     sttProvider: toSttProvider("STT_PROVIDER", "openai"),
@@ -85,9 +99,13 @@ export function loadConfig(): AppConfig {
     googleProjectId: optional("GOOGLE_PROJECT_ID"),
     maxUtteranceSeconds: toInt("MAX_UTTERANCE_SECONDS", 8),
     userCooldownSeconds: toInt("USER_COOLDOWN_SECONDS", 10),
+    guildCooldownSeconds: toInt("GUILD_COOLDOWN_SECONDS", 4),
+    maxTtsQueueItems: toInt("MAX_TTS_QUEUE_ITEMS", 4),
+    maxReplyChars: toInt("MAX_REPLY_CHARS", 280),
     modeDefault: toMode("MODE_DEFAULT", "wakeword"),
     postTextResponses: toBool("POST_TEXT_RESPONSES", true),
-    debugRecordAudio: toBool("DEBUG_RECORD_AUDIO", false)
+    debugRecordAudio: toBool("DEBUG_RECORD_AUDIO", false),
+    logContent: toBool("LOG_CONTENT", false)
   };
 }
 

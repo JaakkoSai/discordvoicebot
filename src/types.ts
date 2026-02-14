@@ -7,6 +7,9 @@ export interface AppConfig {
   discordToken: string;
   discordClientId: string;
   discordGuildId?: string;
+  adminUserIds: string[];
+  allowOnlyAdminsForControlCommands: boolean;
+  allowedSpeakerUserIds: string[];
   openaiApiKey: string;
   openaiModel: string;
   sttProvider: SttProviderName;
@@ -21,9 +24,13 @@ export interface AppConfig {
   googleProjectId?: string;
   maxUtteranceSeconds: number;
   userCooldownSeconds: number;
+  guildCooldownSeconds: number;
+  maxTtsQueueItems: number;
+  maxReplyChars: number;
   modeDefault: SessionMode;
   postTextResponses: boolean;
   debugRecordAudio: boolean;
+  logContent: boolean;
 }
 
 export interface TranscriptEntry {

@@ -54,6 +54,9 @@ Recommended:
 - `OPENAI_MODEL` (cheap default: `gpt-4o-mini`; switch anytime)
 - `STT_PROVIDER=openai|whispercpp`
 - `TTS_PROVIDER=azure|google|local`
+- `ADMIN_USER_IDS=123...,456...` (comma-separated trusted users)
+- `ALLOW_ONLY_ADMINS_FOR_CONTROL_COMMANDS=true`
+- `ALLOWED_SPEAKER_USER_IDS=` (optional comma-separated allowlist for who can trigger replies)
 
 Azure TTS (default):
 - `AZURE_SPEECH_KEY`
@@ -68,9 +71,13 @@ Google fallback:
 Cost control:
 - `MAX_UTTERANCE_SECONDS=8`
 - `USER_COOLDOWN_SECONDS=10`
+- `GUILD_COOLDOWN_SECONDS=4`
+- `MAX_TTS_QUEUE_ITEMS=4`
+- `MAX_REPLY_CHARS=280`
 - `MODE_DEFAULT=wakeword`
 - `POST_TEXT_RESPONSES=true`
 - `DEBUG_RECORD_AUDIO=false`
+- `LOG_CONTENT=false` (do not log transcript/reply text)
 
 ## 4) Usage
 
@@ -93,10 +100,20 @@ Slash commands:
 - Default `wakeword` mode (skip LLM unless wakeword detected).
 - Short max utterance capture window.
 - Per-user cooldown.
+- Per-guild cooldown.
+- TTS queue size cap.
 - 1-2 sentence constrained LLM output.
 - Silence segmentation (`AfterSilence` 800ms) and no raw audio storage by default.
 
-## 6) STT/TTS Provider Notes
+## 6) Abuse-Resistance Defaults
+
+- Control commands (`/join`, `/leave`, `/mode`, `/voice`, `/settextchannel`) are admin-gated.
+  - Allowed if user is in `ADMIN_USER_IDS`, or has `Manage Server` when `ALLOW_ONLY_ADMINS_FOR_CONTROL_COMMANDS=true`.
+- Optional speaker allowlist (`ALLOWED_SPEAKER_USER_IDS`) blocks untrusted users from triggering STT/LLM/TTS.
+- Mentions are neutralized in bot text replies to avoid `@everyone` abuse.
+- Transcript/reply content is not logged unless `LOG_CONTENT=true`.
+
+## 7) STT/TTS Provider Notes
 
 STT:
 - `openai` provider (cloud, easy to run).
@@ -111,7 +128,7 @@ Voice style mapping:
 - `/voice deep`: lower pitch/rate for more "manly/deep" delivery.
 - `/voice normal`: milder pitch/rate.
 
-## 7) Privacy / Consent Note
+## 8) Privacy / Consent Note
 
 This bot listens and transcribes voice when joined to a voice channel.
 - Raw audio is not stored by default (`DEBUG_RECORD_AUDIO=false`).
@@ -120,7 +137,7 @@ This bot listens and transcribes voice when joined to a voice channel.
 
 Check your local laws and Discord server rules before use.
 
-## 8) DAVE / E2EE Compatibility Note
+## 9) DAVE / E2EE Compatibility Note
 
 Discord voice encryption requirements are tightening (DAVE/e2ee rollout timeline includes **March 1, 2026** milestones).
 
@@ -134,7 +151,17 @@ References:
 - Discord blog (DAVE): https://discord.com/blog/encryption-for-voice-and-video-on-discord
 - Discord support notice (DAVE timeline): https://support-dev.discord.com/hc/en-us/articles/29755948322199-DAVE-Implementation-for-Voice-Bots
 
-## 9) Smoke Test Checklist
+## 10) Security Checklist (Before Going Public)
+
+- [ ] Confirm `.env` is not tracked: `git ls-files | findstr /I ".env"`.
+- [ ] Keep only minimal Discord bot permissions: `Connect`, `Speak`, `Send Messages`, `Read Message History`.
+- [ ] Set `ALLOW_ONLY_ADMINS_FOR_CONTROL_COMMANDS=true`.
+- [ ] Set `ADMIN_USER_IDS` to your Discord user ID.
+- [ ] Keep `DEBUG_RECORD_AUDIO=false` in production.
+- [ ] Keep `LOG_CONTENT=false` in production.
+- [ ] Rotate tokens immediately if accidentally exposed.
+
+## 11) Smoke Test Checklist
 
 - [ ] Bot starts and logs in successfully.
 - [ ] Slash commands are visible in guild.
@@ -147,4 +174,3 @@ References:
 - [ ] `/mode off` prevents any reply.
 - [ ] `/cost` shows current cost controls and model/provider names.
 - [ ] `/leave` disconnects cleanly.
-
